@@ -1,5 +1,6 @@
 // Thales Mallmann Hunemeyer
 #include <LiquidCrystal.h>
+#include <EEPROM.h>
 
 LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 
@@ -26,6 +27,74 @@ unsigned long tempoMsgSenhaAlterada = 0;
 bool mostrandoMsgTempoExpirado = false;
 unsigned long tempoMsgTempoExpirado = 0;
 
+// ======================== EEPROM PERSISTENCIA ========================
+struct PersistedSettings {
+  uint8_t magic1;
+  uint8_t magic2;
+  int vv;
+  int va;
+  int vvm;
+  int senha1;
+  int senha2;
+  int senha3;
+  int senha4;
+};
+
+PersistedSettings persistedSettings;
+const uint8_t EEPROM_MAGIC1 = 0x53; // 'S'
+const uint8_t EEPROM_MAGIC2 = 0x4D; // 'M'
+
+bool durationsDirty = false;
+
+void loadPersistedSettings() {
+  EEPROM.get(0, persistedSettings);
+  if (persistedSettings.magic1 != EEPROM_MAGIC1 || persistedSettings.magic2 != EEPROM_MAGIC2) {
+    persistedSettings.magic1 = EEPROM_MAGIC1;
+    persistedSettings.magic2 = EEPROM_MAGIC2;
+    persistedSettings.vv = vv;
+    persistedSettings.va = va;
+    persistedSettings.vvm = vvm;
+    persistedSettings.senha1 = senha1;
+    persistedSettings.senha2 = senha2;
+    persistedSettings.senha3 = senha3;
+    persistedSettings.senha4 = senha4;
+    EEPROM.put(0, persistedSettings);
+  } else {
+    vv = persistedSettings.vv;
+    va = persistedSettings.va;
+    vvm = persistedSettings.vvm;
+    senha1 = persistedSettings.senha1;
+    senha2 = persistedSettings.senha2;
+    senha3 = persistedSettings.senha3;
+    senha4 = persistedSettings.senha4;
+  }
+}
+
+void saveDurations() {
+  persistedSettings.vv = vv;
+  persistedSettings.va = va;
+  persistedSettings.vvm = vvm;
+  EEPROM.put(0, persistedSettings);
+}
+
+void savePassword() {
+  persistedSettings.senha1 = senha1;
+  persistedSettings.senha2 = senha2;
+  persistedSettings.senha3 = senha3;
+  persistedSettings.senha4 = senha4;
+  EEPROM.put(0, persistedSettings);
+}
+
+void mostrarResumoInicial() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("G:"); lcd.print(vv / 1000);
+  lcd.print(" Y:"); lcd.print(va / 1000);
+  lcd.print(" R:"); lcd.print(vvm / 1000);
+  lcd.setCursor(0, 1);
+  lcd.print("Senha: ");
+  lcd.print(senha1); lcd.print(senha2); lcd.print(senha3); lcd.print(senha4);
+}
 // ======================== FUNÇÕES NOVAS ========================
 
 void resetarTentativasSenha() {
@@ -51,6 +120,7 @@ void mostrarMensagemSenhaAlterada() {
   senha2 = newtent2;
   senha3 = newtent3;
   senha4 = newtent4;
+  savePassword();
   resetarTentativasSenha();
   resetarTelaInicial();
   definindoSenha = false;
@@ -80,6 +150,12 @@ void setup() {
   lcd.print("Thales Hunemeyer");
   delay(2000);
   lcd.clear();
+
+  loadPersistedSettings();
+  mostrarResumoInicial();
+  delay(2000);
+  lcd.clear();
+
   tempoAnterior = millis();
   ultimoInput = millis();
 }
@@ -87,9 +163,9 @@ void setup() {
 void nums() {
   lcd.clear();
   if (telaact < 1) telaact = 1;
-  if (tela == 0) { vv = telaact * 1000; lcd.print("Verde: "); }
-  if (tela == 1) { va = telaact * 1000; lcd.print("Amarelo: "); }
-  if (tela == 2) { vvm = telaact * 1000; lcd.print("Vermelho: "); }
+  if (tela == 0) { vv = telaact * 1000; durationsDirty = true; lcd.print("Verde: "); }
+  if (tela == 1) { va = telaact * 1000; durationsDirty = true; lcd.print("Amarelo: "); }
+  if (tela == 2) { vvm = telaact * 1000; durationsDirty = true; lcd.print("Vermelho: "); }
   lcd.print(telaact);
 }
 
@@ -173,6 +249,8 @@ void verificarInatividade() {
 
 void loop() {
   unsigned long agora = millis();
+
+  if (durationsDirty && (agora - ultimoInput > 1000)) { saveDurations(); durationsDirty = false; }
 
   // Verificar inatividade em todas as telas
   verificarInatividade();
